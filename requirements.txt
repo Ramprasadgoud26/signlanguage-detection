@@ -3,4 +3,5 @@ opencv-python
 numpy
 mediapipe
 keras
+os
 tensorflow

@@ -52,30 +52,35 @@ if st.session_state['camera_active']:
     st.text("Press the 'Toggle Camera' button to stop the webcam.")
 
     # Streamlit webcam input
-    frame = st.camera_input("Camera", key="camera_input")
+    cap = cv2.VideoCapture(0)  # Open the default camera
 
-    if frame is not None:
-        # Convert image from bytes to OpenCV format
-        img = cv2.imdecode(np.frombuffer(frame.read(), np.uint8), cv2.IMREAD_COLOR)
+    # Streamlit display area
+    frame_placeholder = st.empty()
 
-        # Crop the frame for hand detection
-        cropframe = img[40:400, 0:300]
-        img = cv2.rectangle(img, (0, 40), (300, 400), (255, 255, 255), 2)
+    # MediaPipe setup
+    mp_hands = mp.solutions.hands
+    with mp_hands.Hands(
+        model_complexity=0,
+        min_detection_confidence=0.5,
+        min_tracking_confidence=0.5) as hands:
+        
+        while st.session_state['camera_active']:
+            ret, frame = cap.read()  # Capture frame from camera
+            if not ret:
+                st.write("Webcam feed not detected.")
+                break
 
-        # MediaPipe setup
-        mp_hands = mp.solutions.hands
-        with mp_hands.Hands(
-            model_complexity=0,
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.5) as hands:
-            
+            # Crop the frame for hand detection
+            cropframe = frame[40:400, 0:300]
+            frame = cv2.rectangle(frame, (0, 40), (300, 400), (255, 255, 255), 2)
+
             # Make detections
             image, results = mediapipe_detection(cropframe, hands)
-            
+
             # Prediction logic
             keypoints = extract_keypoints(results)
             sequence.append(keypoints)
-            sequence = sequence[-30:]
+            sequence = sequence[-30:]  # Keep the last 30 keypoints
 
             try:
                 if len(sequence) == 30:
@@ -83,34 +88,40 @@ if st.session_state['camera_active']:
                     predicted_action = actions[np.argmax(res)]
                     predictions.append(np.argmax(res))
 
-                    # Display sentence and accuracy
-                    if np.unique(predictions[-10:])[0] == np.argmax(res):
-                        if res[np.argmax(res)] > threshold:
-                            if len(sentence) > 0:
-                                if predicted_action != sentence[-1]:
-                                    sentence.append(predicted_action)
-                                    accuracy.append(f"{res[np.argmax(res)] * 100:.2f}")
-                            else:
+                    # Log the predicted action and its probability
+                    st.write(f"Predicted action: {predicted_action}, Probability: {res[np.argmax(res)]:.2f}")
+
+                    # Check if the prediction is above the threshold
+                    if res[np.argmax(res)] > threshold:
+                        if len(sentence) > 0:
+                            if predicted_action != sentence[-1]:
                                 sentence.append(predicted_action)
                                 accuracy.append(f"{res[np.argmax(res)] * 100:.2f}")
+                        else:
+                            sentence.append(predicted_action)
+                            accuracy.append(f"{res[np.argmax(res)] * 100:.2f}")
 
                     if len(sentence) > 1:
-                        sentence = sentence[-1:]
+                        sentence = sentence[-1:]  # Keep only the last action
                         accuracy = accuracy[-1:]
 
                     # Display probability visualization on the frame
-                    img = prob_viz(res, actions, img, colors, threshold)
+                    frame = prob_viz(res, actions, frame, colors, threshold)
 
             except Exception as e:
                 st.error(f"An error occurred: {str(e)}")
 
             # Display output text on the frame
-            cv2.rectangle(img, (0, 0), (300, 40), (245, 117, 16), -1)
-            cv2.putText(img, f"Output: {' '.join(sentence)} {''.join(accuracy)}", 
+            cv2.rectangle(frame, (0, 0), (300, 40), (245, 117, 16), -1)
+            cv2.putText(frame, f"Output: {' '.join(sentence)} {''.join(accuracy)}", 
                         (3, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
 
             # Update the frame in Streamlit
-            st.image(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+            frame_placeholder.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), channels="RGB")
+
+        # Release the camera when done
+        cap.release()
+        cv2.destroyAllWindows()
 
 else:
     st.write("Press the 'Toggle Camera' button to start the webcam feed.")

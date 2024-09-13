@@ -1,6 +1,6 @@
-streamlit==1.19.0
-opencv-python==4.5.5.64
-numpy==1.21.6
-mediapipe==0.9.1
-keras==2.6.0
-tensorflow==2.6.0
+streamlit
+opencv-python
+numpy
+mediapipe
+keras
+tensorflow

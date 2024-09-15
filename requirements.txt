@@ -1,6 +1,7 @@
 streamlit
 opencv-python
 numpy
+opencv-python-headless
 mediapipe
 keras
 tensorflow

@@ -1,6 +1,6 @@
 import streamlit as st
-import numpy as np
 import cv2
+import numpy as np
 from function import mediapipe_detection, extract_keypoints, actions
 from keras.models import model_from_json
 import mediapipe as mp
@@ -51,10 +51,10 @@ st.write(f"Camera is {'active' if st.session_state['camera_active'] else 'inacti
 if st.session_state['camera_active']:
     st.text("Press the 'Toggle Camera' button to stop the webcam.")
 
-    # Streamlit webcam input
-    cap = cv2.VideoCapture(0)  # Open the default camera
+    # Start video capture using OpenCV
+    cap = cv2.VideoCapture(0)
 
-    # Streamlit display area
+    # Streamlit webcam feed
     frame_placeholder = st.empty()
 
     # MediaPipe setup
@@ -64,23 +64,23 @@ if st.session_state['camera_active']:
         min_detection_confidence=0.5,
         min_tracking_confidence=0.5) as hands:
         
-        while st.session_state['camera_active']:
-            ret, frame = cap.read()  # Capture frame from camera
+        while cap.isOpened() and st.session_state['camera_active']:
+            ret, frame = cap.read()
             if not ret:
                 st.write("Webcam feed not detected.")
                 break
 
-            # Crop the frame for hand detection
+            # Process frame
             cropframe = frame[40:400, 0:300]
             frame = cv2.rectangle(frame, (0, 40), (300, 400), (255, 255, 255), 2)
 
             # Make detections
             image, results = mediapipe_detection(cropframe, hands)
-
+            
             # Prediction logic
             keypoints = extract_keypoints(results)
             sequence.append(keypoints)
-            sequence = sequence[-30:]  # Keep the last 30 keypoints
+            sequence = sequence[-30:]
 
             try:
                 if len(sequence) == 30:
@@ -88,21 +88,19 @@ if st.session_state['camera_active']:
                     predicted_action = actions[np.argmax(res)]
                     predictions.append(np.argmax(res))
 
-                    # Log the predicted action and its probability
-                    st.write(f"Predicted action: {predicted_action}, Probability: {res[np.argmax(res)]:.2f}")
-
-                    # Check if the prediction is above the threshold
-                    if res[np.argmax(res)] > threshold:
-                        if len(sentence) > 0:
-                            if predicted_action != sentence[-1]:
+                    # Display sentence and accuracy
+                    if np.unique(predictions[-10:])[0] == np.argmax(res):
+                        if res[np.argmax(res)] > threshold:
+                            if len(sentence) > 0:
+                                if predicted_action != sentence[-1]:
+                                    sentence.append(predicted_action)
+                                    accuracy.append(f"{res[np.argmax(res)] * 100:.2f}")
+                            else:
                                 sentence.append(predicted_action)
                                 accuracy.append(f"{res[np.argmax(res)] * 100:.2f}")
-                        else:
-                            sentence.append(predicted_action)
-                            accuracy.append(f"{res[np.argmax(res)] * 100:.2f}")
 
                     if len(sentence) > 1:
-                        sentence = sentence[-1:]  # Keep only the last action
+                        sentence = sentence[-1:]
                         accuracy = accuracy[-1:]
 
                     # Display probability visualization on the frame
@@ -117,9 +115,8 @@ if st.session_state['camera_active']:
                         (3, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
 
             # Update the frame in Streamlit
-            frame_placeholder.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), channels="RGB")
+            frame_placeholder.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
 
-        # Release the camera when done
         cap.release()
         cv2.destroyAllWindows()
 
